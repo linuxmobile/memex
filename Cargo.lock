@@ -194,6 +194,7 @@ dependencies = [
  "crossbeam-channel",
  "directories",
  "fastembed",
+ "indicatif",
  "memchr",
  "memmap2",
  "once_cell",
