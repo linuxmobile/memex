@@ -1,4 +1,4 @@
-# automem
+# memex
 
 Fast local history search for Claude and Codex logs.
 
