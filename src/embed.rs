@@ -35,7 +35,7 @@ impl ModelChoice {
     }
 
     /// Parse from string (env var or config)
-    pub fn from_str(s: &str) -> Result<Self> {
+    pub fn parse(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "minilm" | "mini" | "fast" => Ok(ModelChoice::MiniLM),
             "bge" | "bge-small" | "bgesmall" => Ok(ModelChoice::BGESmall),
@@ -58,7 +58,7 @@ impl EmbedderHandle {
         // Check MEMEX_MODEL env var, default to Gemma
         let choice = std::env::var("MEMEX_MODEL")
             .ok()
-            .map(|s| ModelChoice::from_str(&s))
+            .map(|s| ModelChoice::parse(&s))
             .transpose()?
             .unwrap_or_default();
 
@@ -69,12 +69,33 @@ impl EmbedderHandle {
         let model_type = choice.to_fastembed();
         let dims = choice.dims();
 
+        // Set thread count for ONNX Runtime to use all cores
+        let num_cpus = std::thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(8);
+        unsafe {
+            std::env::set_var("OMP_NUM_THREADS", num_cpus.to_string());
+            std::env::set_var("ORT_NUM_THREADS", num_cpus.to_string());
+        }
+
         #[cfg(target_os = "macos")]
         let opts = {
-            use ort::execution_providers::CoreMLExecutionProvider;
+            use ort::execution_providers::coreml::{CoreMLComputeUnits, CoreMLExecutionProvider};
+            let compute_units = std::env::var("MEMEX_COMPUTE_UNITS")
+                .ok()
+                .map(|v| match v.to_lowercase().as_str() {
+                    "ane" | "neural" | "neuralengine" => CoreMLComputeUnits::CPUAndNeuralEngine,
+                    "gpu" => CoreMLComputeUnits::CPUAndGPU,
+                    "cpu" => CoreMLComputeUnits::CPUOnly,
+                    _ => CoreMLComputeUnits::All,
+                })
+                .unwrap_or(CoreMLComputeUnits::All);
+            let provider = CoreMLExecutionProvider::default()
+                .with_subgraphs(true)
+                .with_compute_units(compute_units);
             InitOptions::new(model_type)
                 .with_show_download_progress(false)
-                .with_execution_providers(vec![CoreMLExecutionProvider::default().build()])
+                .with_execution_providers(vec![provider.build()])
         };
 
         #[cfg(not(target_os = "macos"))]
@@ -157,8 +178,7 @@ mod tests {
 
         assert!(
             cosine_sim > 0.8,
-            "expected high similarity, got {}",
-            cosine_sim
+            "expected high similarity, got {cosine_sim}"
         );
     }
 }
