@@ -1,6 +1,6 @@
 # memex
 
-Fast local history search for Claude and Codex logs.
+Fast local history search for Claude and Codex logs. Uses BM-25 and optionally embeds your transcripts locally and layers on hybrid search.
 
 ## Build
 
