@@ -4,7 +4,7 @@ Fast local history search for Claude and Codex logs. Uses BM-25 and optionally e
 
 Mostly intended for agents to use via skill. Intended workflow is to ask agent about a previous session & then it can narrow things down & retrieve history as needed.
 
-Includes a TUI for browsing sessions.
+Includes a TUI for browsing, finding and resumign both Claude Code & Codex CLI sessions.
 
 ![memex tui](docs/tui.png)
 
