@@ -4,6 +4,8 @@ Fast local history search for Claude and Codex logs. Uses BM-25 and optionally e
 
 Mostly intended for agents to use via skill. Intended workflow is to ask agent about a previous session & then it can narrow things down & retrieve history as needed.
 
+Includes a TUI for browsing sessions.
+
 ## Install
 
 ```bash
@@ -17,6 +19,42 @@ memex setup
 ```
 
 Restart Claude/Codex after setup.
+
+## Quickstart
+
+Index (incremental):
+```
+memex index
+```
+
+Search (JSONL default):
+```
+memex search "your query" --limit 20
+```
+
+TUI:
+```
+memex tui
+```
+
+Notes:
+- Embeddings are enabled by default.
+- Searches run an incremental reindex by default (configurable).
+
+Full transcript:
+```
+memex session <session_id>
+```
+
+Single record:
+```
+memex show <doc_id>
+```
+
+Human output:
+```
+memex search "your query" -v
+```
 
 ## Build from source
 
@@ -38,37 +76,6 @@ memex setup
 ```
 
 This detects which tools are installed (Claude/Codex) and presents an interactive menu to select which to configure.
-
-## Quickstart
-
-Index (incremental):
-```
-memex index
-```
-
-Search (JSONL default):
-```
-memex search "your query" --limit 20
-```
-
-Notes:
-- Embeddings are enabled by default.
-- Searches run an incremental reindex by default (configurable).
-
-Full transcript:
-```
-memex session <session_id>
-```
-
-Single record:
-```
-memex show <doc_id>
-```
-
-Human output:
-```
-memex search "your query" -v
-```
 
 ## Search modes
 
@@ -150,10 +157,14 @@ scan_cache_ttl = 3600  # seconds (default 1 hour)
 index_service_mode = "interval"  # interval or continuous
 index_service_interval = 3600  # seconds (ignored when mode = "continuous")
 index_service_poll_interval = 30  # seconds
+claude_resume_cmd = "claude --resume {session_id}"
+codex_resume_cmd = "codex resume {session_id}"
 ```
 
 Service logs and the plist live under `~/.memex` by default.
 
 `scan_cache_ttl` controls how long auto-indexing considers scans fresh.
+
+Resume command templates accept `{session_id}`, `{project}`, `{source}`, `{source_path}`.
 
 The skill/prompt definitions are bundled in `skills/`.
