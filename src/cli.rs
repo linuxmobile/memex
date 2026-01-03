@@ -141,6 +141,12 @@ enum Commands {
     },
     /// Install the automem-search skill/prompt for Claude and/or Codex
     Setup,
+    /// Update memex to the latest version
+    Update {
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -285,6 +291,9 @@ pub fn run() -> Result<()> {
         }
         Commands::Setup => {
             run_setup()?;
+        }
+        Commands::Update { yes } => {
+            run_update(yes)?;
         }
     }
     Ok(())
@@ -1619,4 +1628,144 @@ fn resolve_flag(default: bool, enable: bool, disable: bool, name: &str) -> Resul
         return Ok(false);
     }
     Ok(default)
+}
+
+const REPO: &str = "nicosuave/memex";
+
+fn run_update(skip_confirm: bool) -> Result<()> {
+    let current = env!("CARGO_PKG_VERSION");
+    let latest = fetch_latest_version()?;
+
+    if current == latest {
+        println!("memex is already up to date (v{current})");
+        return Ok(());
+    }
+
+    println!("Current version: v{current}");
+    println!("Latest version:  v{latest}");
+    println!();
+
+    if !skip_confirm {
+        use dialoguer::{Confirm, theme::ColorfulTheme};
+        let confirm = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!("Update to v{latest}?"))
+            .default(true)
+            .interact()?;
+        if !confirm {
+            println!("Update cancelled.");
+            return Ok(());
+        }
+    }
+
+    let (os, arch) = detect_platform()?;
+    let url = format!(
+        "https://github.com/{REPO}/releases/download/v{latest}/memex-{latest}-{os}-{arch}.tar.gz"
+    );
+
+    println!("Downloading {url}...");
+
+    let tmp_dir = tempfile::tempdir()?;
+    let archive_path = tmp_dir.path().join("memex.tar.gz");
+
+    // Download using curl
+    let status = std::process::Command::new("curl")
+        .args(["-fsSL", "-o"])
+        .arg(&archive_path)
+        .arg(&url)
+        .status()?;
+    if !status.success() {
+        return Err(anyhow!("Failed to download release"));
+    }
+
+    // Extract
+    let status = std::process::Command::new("tar")
+        .args(["-xzf"])
+        .arg(&archive_path)
+        .arg("-C")
+        .arg(tmp_dir.path())
+        .status()?;
+    if !status.success() {
+        return Err(anyhow!("Failed to extract release"));
+    }
+
+    let new_binary = tmp_dir.path().join("memex");
+    if !new_binary.exists() {
+        return Err(anyhow!("Binary not found in release archive"));
+    }
+
+    // Replace current binary
+    let current_exe = std::env::current_exe()?;
+    let backup = current_exe.with_extension("old");
+
+    // Move current to backup, move new to current
+    if backup.exists() {
+        std::fs::remove_file(&backup)?;
+    }
+    std::fs::rename(&current_exe, &backup)?;
+    std::fs::copy(&new_binary, &current_exe)?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&current_exe, std::fs::Permissions::from_mode(0o755))?;
+    }
+
+    // Remove backup
+    let _ = std::fs::remove_file(&backup);
+
+    println!("Updated memex to v{latest}");
+    Ok(())
+}
+
+fn fetch_latest_version() -> Result<String> {
+    let output = std::process::Command::new("curl")
+        .args(["-fsSL", &format!("https://api.github.com/repos/{REPO}/releases/latest")])
+        .output()?;
+
+    if !output.status.success() {
+        return Err(anyhow!("Failed to fetch latest version"));
+    }
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+    let tag = json["tag_name"]
+        .as_str()
+        .ok_or_else(|| anyhow!("No tag_name in release"))?;
+
+    Ok(tag.trim_start_matches('v').to_string())
+}
+
+fn detect_platform() -> Result<(&'static str, &'static str)> {
+    let os = if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        return Err(anyhow!("Unsupported OS"));
+    };
+
+    let arch = if cfg!(target_arch = "x86_64") {
+        "x86_64"
+    } else if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        return Err(anyhow!("Unsupported architecture"));
+    };
+
+    Ok((os, arch))
+}
+
+/// Check for updates in the background and print a warning if outdated.
+/// This is non-blocking and fails silently.
+pub fn check_for_update_async() {
+    std::thread::spawn(|| {
+        if let Ok(latest) = fetch_latest_version() {
+            let current = env!("CARGO_PKG_VERSION");
+            if current != latest {
+                eprintln!(
+                    "\x1b[33mA new version of memex is available: v{latest} (current: v{current})\x1b[0m"
+                );
+                eprintln!("\x1b[33mRun 'memex update' to upgrade.\x1b[0m");
+            }
+        }
+    });
 }
