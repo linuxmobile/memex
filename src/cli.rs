@@ -1640,7 +1640,23 @@ fn resolve_flag(default: bool, enable: bool, disable: bool, name: &str) -> Resul
 
 const REPO: &str = "nicosuave/memex";
 
+fn is_homebrew_install() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| {
+            p.to_str()
+                .map(|s| s.contains("/Cellar/") || s.contains("/homebrew/"))
+        })
+        .unwrap_or(false)
+}
+
 fn run_update(skip_confirm: bool) -> Result<()> {
+    if is_homebrew_install() {
+        println!("memex was installed via Homebrew.");
+        println!("Run 'brew upgrade memex' to update.");
+        return Ok(());
+    }
+
     let current = env!("CARGO_PKG_VERSION");
     let latest = fetch_latest_version()?;
 
@@ -1768,18 +1784,24 @@ fn detect_platform() -> Result<(&'static str, &'static str)> {
 /// Check for updates in the background and print a warning if outdated.
 /// This is non-blocking and fails silently.
 pub fn check_for_update_async(sender: Option<std::sync::mpsc::Sender<String>>) {
+    let is_brew = is_homebrew_install();
     std::thread::spawn(move || {
         if let Ok(latest) = fetch_latest_version() {
             let current = env!("CARGO_PKG_VERSION");
             if is_newer_version(current, &latest) {
+                let upgrade_cmd = if is_brew {
+                    "brew upgrade memex"
+                } else {
+                    "memex update"
+                };
                 if let Some(sender) = sender {
-                    let message = format!("update: v{latest} (memex update)");
+                    let message = format!("update: v{latest} ({upgrade_cmd})");
                     let _ = sender.send(message);
                 } else {
                     eprintln!(
                         "\x1b[33mA new version of memex is available: v{latest} (current: v{current})\x1b[0m"
                     );
-                    eprintln!("\x1b[33mRun 'memex update' to upgrade.\x1b[0m");
+                    eprintln!("\x1b[33mRun '{upgrade_cmd}' to upgrade.\x1b[0m");
                 }
             }
         }
