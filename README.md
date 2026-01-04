@@ -6,7 +6,7 @@ Mostly intended for agents to use via skill. Intended workflow is to ask agent a
 
 Includes a TUI for browsing, finding and resumign both Claude Code & Codex CLI sessions.
 
-![memex tui](docs/tui.png)
+![memex tui](docs/tui.png?raw=1&v=2)
 
 ## Install
 
