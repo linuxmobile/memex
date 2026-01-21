@@ -25,6 +25,77 @@ Or (from the [AUR](https://aur.archlinux.org/packages/memex) on Arch Linux):
 paru -S memex
 ```
 
+Or (with [Nix](https://nixos.org/)):
+
+```bash
+nix run github:nicosuave/memex
+```
+
+<details>
+<summary>Nix development and advanced configuration</summary>
+
+**Development shell:**
+
+```bash
+nix develop
+```
+
+> **Note:** No binary cache is configured, so first builds compile from source.
+
+**NixOS service:**
+
+Enable background indexing with the provided module:
+
+```nix
+{
+  inputs.memex.url = "github:nicosuave/memex";
+
+  outputs = { nixpkgs, memex, ... }: {
+    nixosConfigurations.default = nixpkgs.lib.nixosSystem {
+      modules = [
+        memex.nixosModules.default
+        {
+          services.memex = {
+            enable = true;
+            continuous = true; # Run as a daemon (optional)
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+**Home Manager:**
+
+Configure memex declaratively (generates `~/.memex/config.toml`):
+
+```nix
+{
+  inputs.memex.url = "github:nicosuave/memex";
+
+  outputs = { memex, ... }: {
+    # Inside your Home Manager configuration
+    modules = [
+      memex.homeManagerModules.default
+      {
+        programs.memex = {
+          enable = true;
+          settings = {
+            embeddings = true;
+            model = "minilm";
+            auto_index_on_search = true;
+            index_service_interval = 3600;
+          };
+        };
+      }
+    ];
+  };
+}
+```
+
+</details>
+
 Then run setup to install the skill/prompt:
 
 ```bash
@@ -79,87 +150,6 @@ Binary:
 ```
 ./target/release/memex
 ```
-
-## Nix
-
-### Quickstart
-
-Run memex directly from the flake:
-
-```bash
-nix run github:nicosuave/memex
-```
-
-### Development Environment
-
-Enter a reproducible development shell:
-
-```bash
-nix develop
-```
-
-> **Note**
-> No public binary cache is currently configured. The first run of `nix build` or `nix run` will build from source locally.
-
-### NixOS Service
-
-Enable the background indexing service using the provided module.
-
-<details>
-<summary>NixOS Module Configuration</summary>
-
-```nix
-{
-  inputs.memex.url = "github:nicosuave/memex";
-
-  outputs = { nixpkgs, memex, ... }: {
-    nixosConfigurations.default = nixpkgs.lib.nixosSystem {
-      modules = [
-        memex.nixosModules.default
-        {
-          services.memex = {
-            enable = true;
-            continuous = true; # Run as a daemon (optional)
-          };
-        }
-      ];
-    };
-  };
-}
-```
-</details>
-
-### Home Manager
-
-Configure settings declaratively. This generates `~/.memex/config.toml`.
-
-<details>
-<summary>Home Manager Configuration</summary>
-
-```nix
-{
-  inputs.memex.url = "github:nicosuave/memex";
-
-  outputs = { memex, ... }: {
-    # Inside your Home Manager configuration
-    modules = [
-      memex.homeManagerModules.default
-      {
-        programs.memex = {
-          enable = true;
-          settings = {
-            embeddings = true;
-            model = "minilm";
-            auto_index_on_search = true;
-            index_service_interval = 3600;
-          };
-        };
-      }
-    ];
-  };
-}
-```
-</details>
 
 ## Setup (manual)
 
